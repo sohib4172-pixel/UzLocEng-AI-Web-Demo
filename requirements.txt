@@ -1,0 +1,2 @@
+# No third-party Python dependencies are required.
+# This MVP uses only the Python standard library.

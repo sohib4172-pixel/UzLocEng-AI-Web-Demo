@@ -1,0 +1,45 @@
+# Python runtime artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Secrets and local configuration
+.env
+.env.*
+*.pem
+*.key
+
+# Runtime data, indexes and logs
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.bin
+*.onnx
+*.log
+logs/
+
+# Executables, archives and build output
+*.exe
+*.dll
+*.zip
+*.7z
+*.rar
+dist/
+build/
+
+# Private technical material
+*.pdf
+*.djvu
+*.doc
+*.docx
+*.rtf
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+*.dwg
+*.dxf
+*.cdw
