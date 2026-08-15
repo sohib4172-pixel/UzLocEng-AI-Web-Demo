@@ -23,6 +23,24 @@ ROOT = Path(__file__).resolve().parent
 SOURCE_PATH = ROOT / "demo_data" / "synthetic_bag_filter_demo.txt"
 SOURCE_ID = "S1"
 SESSIONS: set[str] = set()
+NOT_FOUND_TEXT = "В синтетическом демонстрационном источнике точный ответ на этот вопрос не найден."
+PARAMETERS = (
+    {
+        "keywords": ("скорост",),
+        "answer": "Запыленный газ поступает в нижнюю часть рукавного фильтра со скоростью 12 м/с [S1].",
+        "evidence_prefix": "1.",
+    },
+    {
+        "keywords": ("диаметр",),
+        "answer": "Диаметр фильтровальных рукавов составляет 100–300 мм [S1].",
+        "evidence_prefix": "2.",
+    },
+    {
+        "keywords": ("высот",),
+        "answer": "Высота фильтровальных рукавов составляет 0,5–10 м [S1].",
+        "evidence_prefix": "3.",
+    },
+)
 
 
 def read_source() -> str:
@@ -32,28 +50,27 @@ def read_source() -> str:
 def answer_for(question: str) -> dict[str, object]:
     """Return only facts explicitly present in the synthetic demonstration text."""
     normalized = " ".join(question.casefold().split())
-    relevant_terms = ("рукав", "запыл", "скорост", "диаметр", "высот", "фильтр")
-    if not any(term in normalized for term in relevant_terms):
+    selected = [
+        parameter
+        for parameter in PARAMETERS
+        if any(keyword in normalized for keyword in parameter["keywords"])
+    ]
+    if not selected:
         return {
             "found": False,
-            "answer": "В синтетическом демонстрационном источнике точный ответ на этот вопрос не найден.",
+            "answer": NOT_FOUND_TEXT,
             "citations": [],
             "evidence": [],
         }
 
-    source = read_source()
+    source_lines = read_source().splitlines()
     evidence = [
-        line.strip()
-        for line in source.splitlines()
-        if line.startswith(("1.", "2.", "3."))
+        next(line.strip() for line in source_lines if line.startswith(parameter["evidence_prefix"]))
+        for parameter in selected
     ]
     return {
         "found": True,
-        "answer": (
-            "Запыленный газ поступает в нижнюю часть рукавного фильтра со скоростью "
-            "12 м/с [S1]. Диаметр фильтровальных рукавов составляет 100–300 мм [S1]. "
-            "Высота фильтровальных рукавов составляет 0,5–10 м [S1]."
-        ),
+        "answer": " ".join(parameter["answer"] for parameter in selected),
         "citations": [SOURCE_ID],
         "evidence": evidence,
     }
