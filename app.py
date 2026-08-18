@@ -85,14 +85,22 @@ def _fact_text(line: str) -> str:
     return line.split(". ", 1)[1] if ". " in line else line
 
 
-def _result(domain: dict, keys: tuple[str, ...], answer: str | None = None) -> dict[str, object]:
+def _result(
+    domain: dict,
+    keys: tuple[str, ...],
+    answer: str | None = None,
+    formula: tuple[str, ...] | None = None,
+) -> dict[str, object]:
     lines = [_source_line(domain, domain["parameters"][key][2]) for key in keys]
-    return {
+    result = {
         "found": True,
         "answer": answer if answer is not None else " ".join(_fact_text(line) for line in lines),
         "citations": [domain["source_id"]],
         "evidence": lines,
     }
+    if formula:
+        result["formula"] = formula
+    return result
 
 
 def _insufficient() -> dict[str, object]:
@@ -112,6 +120,8 @@ def _single_parameter(domain: dict, question: str, object_id: str | None) -> str
     matches = []
     for key, (parameter_object, aliases, _prefix) in domain["parameters"].items():
         if object_id and parameter_object != object_id:
+            continue
+        if key.endswith("_voltage") and "номинальн" not in question:
             continue
         found_aliases = [alias for alias in aliases if alias in question]
         if found_aliases:
@@ -139,26 +149,26 @@ def _calculation(domain_id: str, domain: dict, question: str) -> dict[str, objec
             cos_phi = _number(domain, "motor_cosphi", r"— ([0-9,]+)")
             efficiency = _number(domain, "motor_efficiency", r"— ([0-9,]+)")
             current = power / (math.sqrt(3) * voltage * cos_phi * efficiency)
-            answer = ("Расчёт по данным источника: I = P / (√3 × U × cosφ × η). "
-                      f"I = {power / 1000:.0f} кВт / (√3 × {voltage:.0f} В × {cos_phi:.2f} × {efficiency:.2f}) = {current:.1f} А.")
-            return _result(domain, keys, answer)
+            formula = (
+                "I = P / (√3 × U × cosφ × η)",
+                f"I = {power:,.0f} / (√3 × {voltage:.0f} × {cos_phi:.2f} × {efficiency:.2f})".replace(",", " ").replace(".", ","),
+            )
+            return _result(domain, keys, f"Расчётный ток: {current:.1f} А".replace(".", ","), formula)
         if domain_id == "mechanics" and any(word in question for word in ("редуктор", "выходн")):
             keys = ("gearbox_input_speed", "gear_ratio")
             input_speed = _number(domain, "gearbox_input_speed", r"— ([0-9 ]+) об/мин")
             ratio = _number(domain, "gear_ratio", r"— ([0-9,]+)")
             output_speed = input_speed / ratio
-            answer = ("Расчёт по данным источника: nвых = nвх / i. "
-                      f"nвых = {input_speed:.0f} об/мин / {ratio:.1f} = {output_speed:.1f} об/мин.")
-            return _result(domain, keys, answer)
+            formula = ("nвых = nвх / i", f"nвых = {input_speed:.0f} / {ratio:.1f}".replace(".", ","))
+            return _result(domain, keys, f"Частота вращения выходного вала: {output_speed:.1f} об/мин".replace(".", ","), formula)
         if domain_id == "technology" and any(word in question for word in ("площад", "фильтрац")):
             keys = ("diameter", "height", "count")
             diameter = _number(domain, "diameter", r"— ([0-9,]+) мм") / 1000
             height = _number(domain, "height", r"— ([0-9,]+) м")
             count = _number(domain, "count", r"— ([0-9]+)")
             area = math.pi * diameter * height * count
-            answer = ("Расчёт по данным источника: F = π × d × L × N. "
-                      f"F = π × {diameter:.3f} м × {height:.1f} м × {count:.0f} = {area:.1f} м².")
-            return _result(domain, keys, answer)
+            formula = ("F = π × d × L × N", f"F = π × {diameter:.3f} × {height:.1f} × {count:.0f}".replace(".", ","))
+            return _result(domain, keys, f"Общая площадь фильтрации: {area:.1f} м²".replace(".", ","), formula)
     except ValueError:
         return _insufficient()
     return _insufficient()
@@ -169,6 +179,8 @@ def answer_for(question: str, domain_id: str) -> dict[str, object]:
     domain = DOMAINS.get(domain_id)
     normalized = " ".join(question.casefold().split())
     if not domain or not normalized:
+        return _insufficient()
+    if any(term in normalized for term in ("класс", "тип", "вид", "марка", "категор")):
         return _insufficient()
     calculation = _calculation(domain_id, domain, normalized)
     if calculation is not None:
@@ -188,9 +200,9 @@ async function signIn(){const r=await fetch('/api/login',{method:'POST',headers:
 </script></body></html>"""
 
 APP_PAGE = """<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>UzLocEng AI — Демонстрация</title>
-<style>body{margin:0;background:#f2f6fa;color:#102a43;font:16px Arial,sans-serif}.top{background:#062f4f;color:#fff;padding:18px 7%;display:flex;justify-content:space-between}.wrap{max-width:980px;margin:30px auto;padding:0 20px}.panel{background:#fff;padding:24px;margin:18px 0;border-radius:12px;box-shadow:0 4px 16px #1232}textarea,select{width:100%;min-height:52px;padding:12px;box-sizing:border-box;border:1px solid #b8c6d4;border-radius:8px;font:inherit}textarea{min-height:110px}button{margin-top:12px;background:#087e8b;color:white;border:0;padding:12px 18px;border-radius:8px;font-weight:bold;cursor:pointer}.hidden{display:none}.answer{white-space:pre-wrap;line-height:1.6}.tag{display:inline-block;background:#d9f3f4;color:#075d67;border-radius:14px;padding:4px 10px;margin-right:6px}.evidence{border-left:4px solid #087e8b;padding:10px 14px;background:#f6fbfb;margin:8px 0}.muted{color:#486581}.directions{display:flex;gap:8px;flex-wrap:wrap}.direction{border:1px solid #b8c6d4;border-radius:8px;padding:9px 12px;background:#f6fbfb}</style>
+<style>body{margin:0;background:#f2f6fa;color:#102a43;font:16px Arial,sans-serif}.top{background:#062f4f;color:#fff;padding:18px 7%;display:flex;justify-content:space-between}.wrap{max-width:980px;margin:30px auto;padding:0 20px}.panel{background:#fff;padding:24px;margin:18px 0;border-radius:12px;box-shadow:0 4px 16px #1232}textarea,select{width:100%;min-height:52px;padding:12px;box-sizing:border-box;border:1px solid #b8c6d4;border-radius:8px;font:inherit}textarea{min-height:110px}button{margin-top:12px;background:#087e8b;color:white;border:0;padding:12px 18px;border-radius:8px;font-weight:bold;cursor:pointer}.hidden{display:none}.answer{white-space:pre-wrap;line-height:1.6}.formula{margin:10px 0;padding:12px 14px;border-left:4px solid #087e8b;background:#f6fbfb;font-family:ui-monospace,Consolas,monospace;white-space:pre-wrap}.calculation-result{margin-top:10px;font-weight:bold;color:#075d67}.tag{display:inline-block;background:#d9f3f4;color:#075d67;border-radius:14px;padding:4px 10px;margin-right:6px}.evidence{border-left:4px solid #087e8b;padding:10px 14px;background:#f6fbfb;margin:8px 0}.muted{color:#486581}.directions{display:flex;gap:8px;flex-wrap:wrap}.direction{border:1px solid #b8c6d4;border-radius:8px;padding:9px 12px;background:#f6fbfb}</style>
 </head><body><header class="top"><strong>UzLocEng AI</strong><span>Демонстрационная версия</span></header><main class="wrap"><section class="panel"><h2>Демонстрационные направления</h2><p class="muted">Демонстрационная база поддерживает поиск параметров, сопоставление данных и отдельные инженерные расчёты.</p><div class="directions"><span class="direction">Энергетика</span><span class="direction">Механика</span><span class="direction">Технология</span></div></section><section class="panel"><h1>Технический вопрос</h1><p><span class="tag">Синтетическая база знаний</span></p><label>Направление<select id="domain"><option value="energy">Энергетика</option><option value="mechanics">Механика</option><option value="technology">Технология</option></select></label><textarea id="question" placeholder="Введите технический вопрос на русском языке"></textarea><button onclick="ask()">Получить ответ</button></section><section id="result" class="panel hidden"><h2>Ответ</h2><div id="answer" class="answer"></div><h3>Использованные источники</h3><div id="citations"></div><h3>Доказательства</h3><div id="evidence"></div></section></main><script>
-function esc(v){const e=document.createElement('span');e.textContent=v;return e.innerHTML}async function ask(){const question=document.getElementById('question').value.trim();if(!question)return;const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,domain:domain.value})});if(r.status===401){location='/login';return}const data=await r.json();result.classList.remove('hidden');answer.innerHTML=esc(data.answer);citations.innerHTML=data.citations.length?data.citations.map(x=>'<span class="tag">['+esc(x)+']</span>').join(''):'<span class="muted">Нет использованных источников.</span>';evidence.innerHTML=data.evidence.length?data.evidence.map(x=>'<div class="evidence">'+esc(x)+'</div>').join(''):'<span class="muted">Нет доказательств.</span>'}
+function esc(v){const e=document.createElement('span');e.textContent=v;return e.innerHTML}async function ask(){const question=document.getElementById('question').value.trim();if(!question)return;const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,domain:domain.value})});if(r.status===401){location='/login';return}const data=await r.json();result.classList.remove('hidden');answer.innerHTML=data.formula?'<div class="formula">'+data.formula.map(esc).join('\n')+'</div><div class="calculation-result">'+esc(data.answer)+'</div>':esc(data.answer);citations.innerHTML=data.citations.length?data.citations.map(x=>'<span class="tag">['+esc(x)+']</span>').join(''):'<span class="muted">Нет использованных источников.</span>';evidence.innerHTML=data.evidence.length?data.evidence.map(x=>'<div class="evidence">'+esc(x)+'</div>').join(''):'<span class="muted">Нет доказательств.</span>'}
 </script></body></html>"""
 
 
